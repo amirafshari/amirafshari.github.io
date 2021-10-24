@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://amirafshari.github.io/blog</id>
+    <title>Amir Afshari Blog</title>
+    <updated>2019-05-28T00:00:00.000Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://amirafshari.github.io/blog"/>
+    <subtitle>Amir Afshari Blog</subtitle>
+    <icon>https://amirafshari.github.io/img/favicon.png</icon>
+    <entry>
+        <title type="html"><![CDATA[Automatic License Plate Detection]]></title>
+        <id>license-plate-detection</id>
+        <link href="https://amirafshari.github.io/blog/license-plate-detection"/>
+        <updated>2019-05-28T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[1. I prefer to do these in command palette rather than jupyter, because we can see the results.]]></summary>
+    </entry>
+</feed>

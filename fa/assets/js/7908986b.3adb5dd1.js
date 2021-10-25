@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkmy_website=self.webpackChunkmy_website||[]).push([[154],{1230:function(e){e.exports=JSON.parse('{"allTagsPath":"/fa/blog/tags","slug":"deep-learning","name":"deep learning","count":1,"permalink":"/fa/blog/tags/deep-learning"}')}}]);

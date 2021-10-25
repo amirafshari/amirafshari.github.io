@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkmy_website=self.webpackChunkmy_website||[]).push([[408],{5641:function(e){e.exports=JSON.parse('{"title":"Recent posts","items":[{"title":"Automatic License Plate Detection","permalink":"/blog/license-plate-detection"}]}')}}]);

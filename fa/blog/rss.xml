@@ -4,15 +4,15 @@
         <title>Amir Afshari Blog</title>
         <link>https://amirafshari.github.io/blog</link>
         <description>Amir Afshari Blog</description>
-        <lastBuildDate>Tue, 28 May 2019 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sat, 28 Aug 2021 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <item>
-            <title><![CDATA[Automatic License Plate Detection]]></title>
-            <link>https://amirafshari.github.io/fa/blog/license-plate-detection</link>
-            <guid>license-plate-detection</guid>
-            <pubDate>Tue, 28 May 2019 00:00:00 GMT</pubDate>
-            <description><![CDATA[1. I prefer to do these in command palette rather than jupyter, because we can see the results.]]></description>
+            <title><![CDATA[Train a Custom Object Detector]]></title>
+            <link>https://amirafshari.github.io/fa/blog/train-custom-object-detector</link>
+            <guid>train-custom-object-detector</guid>
+            <pubDate>Sat, 28 Aug 2021 00:00:00 GMT</pubDate>
+            <description><![CDATA[download]]></description>
         </item>
     </channel>
 </rss>

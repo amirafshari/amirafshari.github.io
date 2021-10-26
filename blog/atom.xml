@@ -1,30 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-    <id>https://amirafshari.github.io/blog</id>
+    <id>https://amirafshari.com/blog</id>
     <title>Amir Afshari Blog</title>
     <updated>2021-09-02T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
-    <link rel="alternate" href="https://amirafshari.github.io/blog"/>
+    <link rel="alternate" href="https://amirafshari.com/blog"/>
     <subtitle>Amir Afshari Blog</subtitle>
-    <icon>https://amirafshari.github.io/img/favicon.png</icon>
+    <icon>https://amirafshari.com/img/favicon.png</icon>
     <entry>
         <title type="html"><![CDATA[Automatic License Plate Detector]]></title>
         <id>license-plate-detector</id>
-        <link href="https://amirafshari.github.io/blog/license-plate-detector"/>
+        <link href="https://amirafshari.com/blog/license-plate-detector"/>
         <updated>2021-09-02T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[result-9]]></summary>
     </entry>
     <entry>
         <title type="html"><![CDATA[Train a Custom Object Detector]]></title>
         <id>train-custom-object-detector</id>
-        <link href="https://amirafshari.github.io/blog/train-custom-object-detector"/>
+        <link href="https://amirafshari.com/blog/train-custom-object-detector"/>
         <updated>2021-08-28T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[download]]></summary>
     </entry>
     <entry>
         <title type="html"><![CDATA[Housing Data Analysis]]></title>
         <id>housing-data-analysis</id>
-        <link href="https://amirafshari.github.io/blog/housing-data-analysis"/>
+        <link href="https://amirafshari.com/blog/housing-data-analysis"/>
         <updated>2020-08-28T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[density2]]></summary>
     </entry>

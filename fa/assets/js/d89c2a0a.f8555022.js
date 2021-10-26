@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkmy_website=self.webpackChunkmy_website||[]).push([[213],{8519:function(a){a.exports=JSON.parse('{"allTagsPath":"/fa/blog/tags","slug":"data-visualization","name":"data visualization","count":1,"permalink":"/fa/blog/tags/data-visualization"}')}}]);

@@ -4,15 +4,29 @@
         <title>Amir Afshari Blog</title>
         <link>https://amirafshari.github.io/blog</link>
         <description>Amir Afshari Blog</description>
-        <lastBuildDate>Sat, 28 Aug 2021 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 02 Sep 2021 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Automatic License Plate Detector]]></title>
+            <link>https://amirafshari.github.io/fa/blog/license-plate-detector</link>
+            <guid>license-plate-detector</guid>
+            <pubDate>Thu, 02 Sep 2021 00:00:00 GMT</pubDate>
+            <description><![CDATA[result-9]]></description>
+        </item>
         <item>
             <title><![CDATA[Train a Custom Object Detector]]></title>
             <link>https://amirafshari.github.io/fa/blog/train-custom-object-detector</link>
             <guid>train-custom-object-detector</guid>
             <pubDate>Sat, 28 Aug 2021 00:00:00 GMT</pubDate>
             <description><![CDATA[download]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Housing Data Analysis]]></title>
+            <link>https://amirafshari.github.io/fa/blog/housing-data-analysis</link>
+            <guid>housing-data-analysis</guid>
+            <pubDate>Fri, 28 Aug 2020 00:00:00 GMT</pubDate>
+            <description><![CDATA[density2]]></description>
         </item>
     </channel>
 </rss>

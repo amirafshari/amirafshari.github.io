@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkmy_website=self.webpackChunkmy_website||[]).push([[678],{5641:function(e){e.exports=JSON.parse('{"title":"Recent posts","items":[{"title":"Train a Custom Object Detector","permalink":"/blog/train-custom-object-detector"}]}')}}]);

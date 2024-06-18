@@ -9,6 +9,767 @@
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
         <item>
+            <title><![CDATA[Satellite Data Vector Database]]></title>
+            <link>https://amirafshari.github.io/blog/remote-sensing-image-search-cbir-becnchmark</link>
+            <guid>https://amirafshari.github.io/blog/remote-sensing-image-search-cbir-becnchmark</guid>
+            <pubDate>Sat, 18 May 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[png]]></description>
+            <content:encoded><![CDATA[<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_60_1-640dab6c0bee7b9b33e6a35412c6dd34.png" width="800" height="500"></p>
+<p>With the rapid advancement of remote sensing technologies, the availability of large-scale satellite image datasets has grown exponentially. These datasets contain invaluable information for various applications, including environmental monitoring, urban planning, and disaster management. However, extracting specific categories of objects, such as identifying all images which are similar to a sepcific query image
+within a dataset of thousands or millions or even billions of samples, presents a significant challenge for human analyst.
+ships within a dataset of one million samples, presents a significant challenge due to the sheer volume of data and the complexity of manual analysis.</p>
+<h3 id="solution">Solution</h3>
+<p>This task, which is overwhelming for human analysts, can be efficiently addressed using vector search techniques. By leveraging deep learning models to transform images into high-dimensional vectors and utilizing various models such as classification, segmentation, etc, we can use their last layer features and employ nearest neighbor search algorithms to quickly and accurately retrieve relevant images based on their content or semantic meaning.</p>
+<p>For instance, you find and interesting shape in your dataset and you want to figure out if there is any similar image in your dataset or not? To do so, you can use that image as a search query to find the similar images.</p>
+<h3 id="good-to-know">Good to know</h3>
+<ul>
+<li>I just fine-tuned ResNet50 on AID dataset, we can train more architectures on different datasets and benchmark them.</li>
+<li>By fine-tuning on a large-scale dataset, the accuracy significantly improves.</li>
+<li>It's not a production-level (or even near-production-level) solution, so there is plenty of room for improvement in both speed and accuracy.</li>
+<li>We can use vector databases such as Weaviate or Redis instead of a simple Python list.</li>
+<li>It's good to dig into the datasets first and then judge the performance of the model.</li>
+<li>You can find the <a href="https://github.com/amirafshari/rs-cbir">code on Github</a></li>
+</ul>
+<pre><code class="language-python">import matplotlib.pyplot as plt
+import seaborn as sns
+
+import pandas as pd
+import numpy as np 
+import torch
+import torch.nn as nn
+from torchvision import models, transforms, utils
+from torch.utils.data import Dataset, DataLoader, random_split
+from skimage import io, transform
+from sklearn.neighbors import NearestNeighbors
+from sklearn.metrics import confusion_matrix, accuracy_score
+
+import os
+import glob
+import random
+
+from PIL import Image
+</code></pre>
+<pre><code class="language-python">device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device
+</code></pre>
+<p>device(type='cuda')</p>
+<h2 id="datasets">Datasets</h2>
+<h3 id="aid">AID</h3>
+<p>To Do</p>
+<ul>
+<li>Dataset Details</li>
+</ul>
+<pre><code class="language-python">class AID(Dataset):
+
+    def __init__(self, root_dir):
+
+        self.label_map = {}
+        self.info = []
+        i = 0
+        for root, dirs, files in os.walk(root_dir):
+                
+            for file in files:
+                
+                if file.endswith((".jpg", ".tif", ".png", "jpeg")):
+                    file_path = os.path.join(root, file)
+                    label = root.split('/')[-1]
+                    self.info.append((file_path, label.lower()))
+
+
+                if label.lower() not in self.label_map:
+                    self.label_map[label.lower()] = i
+                    i += 1
+
+        random.shuffle(self.info)
+        self.transform = transform
+
+
+    def map_labels(self, label):
+        return self.label_map[label]
+
+
+
+
+
+    def __len__(self):
+        return len(self.info)
+
+
+    def __getitem__(self, idx):
+        img_path, label = self.info[idx]
+
+        label = self.map_labels(label.lower())
+
+        img = io.imread(img_path)[:,:,:3]
+        img = img / 255.
+        img = torch.tensor(img, dtype=torch.float32)
+        
+        return img, label, img_path
+</code></pre>
+<pre><code class="language-python">dataset = AID('datasets/AID')
+
+label_map = dataset.label_map
+class_map = {v: k for k, v in label_map.items()}
+classes = [v for k,v in class_map.items()]
+</code></pre>
+<pre><code class="language-python">rows, columns = 2, 5
+fig, axs = plt.subplots(rows, columns, figsize=(21, 8), squeeze=True)
+
+
+n = 0
+for i in range(rows):
+    for j in range(columns):
+        img, label, _ = dataset[n]
+        clss = class_map[label]
+
+        axs[i][j].imshow(img)
+        axs[i][j].set_title(clss)
+        n += 1
+plt.show()
+</code></pre>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_8_0-25c11ee343a89a4df15c21a610eb0aff.png" width="800" height="300"></p>
+<h3 id="fair1m">FAIR1M</h3>
+<pre><code class="language-python">class FAIR1M(Dataset):
+
+    def __init__(self, root_dir, transform=None):
+
+        self.label_map = {
+            'ship': 0,
+            'airplane': 1,
+            'neighborhood': 2,
+        }
+
+        self.info = []
+        for root, dirs, files in os.walk(root_dir):
+            for file in files:
+                if file.endswith((".jpg", ".tif", ".png", "jpeg")):
+                    file_path = os.path.join(root, file)
+                    label = root.split('/')[-1]
+                    self.info.append((file_path, label.lower()))
+
+        random.shuffle(self.info)
+        self.transform = transform
+
+    def map_labels(self, label):
+        return self.label_map[label]
+
+
+
+
+
+    def __len__(self):
+        return len(self.info)
+
+
+    def __getitem__(self, idx):
+        img_path, label = self.info[idx]
+
+        label = self.map_labels(label.lower())
+
+        img = io.imread(img_path)[:,:,:3]
+        img = img / 255.
+        img = torch.tensor(img, dtype=torch.float32)
+        
+        return img, label, img_path
+</code></pre>
+<pre><code class="language-python">dataset = FAIR1M('datasets/FAIR1M_partial')
+
+class_map = {
+    0: 'ship',
+    1: 'airplane',
+    2: 'neighborhood',
+}
+classes = [v for k,v in class_map.items()]
+classes
+</code></pre>
+<p>['ship', 'airplane', 'neighborhood']</p>
+<pre><code class="language-python">rows, columns = 2, 5
+fig, axs = plt.subplots(rows, columns, figsize=(21, 8), squeeze=True)
+
+
+n = 0
+for i in range(rows):
+    for j in range(columns):
+        img, label, _ = dataset[n]
+        clss = class_map[label]
+
+        axs[i][j].imshow(img)
+        axs[i][j].set_title(clss)
+        n += 1
+plt.show()
+</code></pre>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_13_0-13d2af7f5f68dc6d50f351728fd8ddf6.png" width="800" height="300"></p>
+<h3 id="resisc45">RESISC45</h3>
+<pre><code class="language-python">class RESISC45(Dataset):
+
+    def __init__(self, root_dir, transform=None):
+
+        self.label_map = {
+            'ship': 0,
+            'airplane': 1,
+            'bridge': 2,
+        }
+
+        self.info = []
+        for root, dirs, files in os.walk(root_dir):
+            for file in files:
+                if file.endswith((".jpg", ".tif", ".png", "jpeg")):
+                    file_path = os.path.join(root, file)
+                    label = root.split('/')[-1]
+                    self.info.append((file_path, label))
+
+        random.shuffle(self.info)
+        self.transform = transform
+
+    def map_labels(self, label):
+        return self.label_map[label]
+
+
+
+
+
+    def __len__(self):
+        return len(self.info)
+
+
+    def __getitem__(self, idx):
+        img_path, label = self.info[idx]
+
+        label = self.map_labels(label.lower())
+
+        img = io.imread(img_path)[:,:,:3]
+        img = img / 255.
+        img = torch.tensor(img, dtype=torch.float32)
+        
+        return img, label, img_path
+</code></pre>
+<pre><code class="language-python">dataset = RESISC45('datasets/RESISC45_partial')
+</code></pre>
+<pre><code class="language-python">class_map = {
+    0: 'ship',
+    1: 'airplane',
+    2: 'bridge',
+}
+classes = [v for k,v in class_map.items()]
+classes
+</code></pre>
+<p>['ship', 'airplane', 'bridge']</p>
+<pre><code class="language-python">rows, columns = 2, 5
+fig, axs = plt.subplots(rows, columns, figsize=(21, 8), squeeze=True)
+
+
+n = 0
+for i in range(rows):
+    for j in range(columns):
+        img, label, _ = dataset[n]
+        clss = class_map[label]
+
+        axs[i][j].imshow(img)
+        axs[i][j].set_title(clss)
+        n += 1
+plt.show()
+</code></pre>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_18_0-12cbcd9abf2444e3218ae01195aabf52.png" width="800" height="300"></p>
+<h3 id="sentinel-2-ship">Sentinel-2 ship</h3>
+<pre><code class="language-python">class SS2(Dataset):
+
+    def __init__(self, root_dir, transform=None):
+
+        self.label_map = {
+            'ship': 0,
+            'noship': 1,
+        }
+
+        self.info = []
+        for root, dirs, files in os.walk(root_dir):
+            for file in files:
+                if file.endswith((".jpg", ".tif", ".png", "jpeg")):
+                    file_path = os.path.join(root, file)
+                    label = root.split('/')[-1]
+                    self.info.append((file_path, label))
+
+        random.shuffle(self.info)
+        self.transform = transform
+
+    def map_labels(self, label):
+        return self.label_map[label]
+
+
+
+
+
+    def __len__(self):
+        return len(self.info)
+
+
+    def __getitem__(self, idx):
+        img_path, label = self.info[idx]
+
+        label = self.map_labels(label.lower())
+
+        img = io.imread(img_path)[:,:,:3]
+        img = img / 255.
+        img = torch.tensor(img, dtype=torch.float32)
+        
+        return img, label, img_path
+</code></pre>
+<pre><code class="language-python">dataset = SS2('datasets/Sentinel2_partial')
+</code></pre>
+<pre><code class="language-python">class_map = {
+    0: 'ship',
+    1: 'noship',
+}
+classes = [v for k,v in class_map.items()]
+classes
+</code></pre>
+<p>['ship', 'noship']</p>
+<pre><code class="language-python">rows, columns = 2, 5
+fig, axs = plt.subplots(rows, columns, figsize=(21, 8), squeeze=True)
+
+
+n = 0
+for i in range(rows):
+    for j in range(columns):
+        img, label, _ = dataset[n]
+        clss = class_map[label]
+
+        axs[i][j].imshow(img)
+        axs[i][j].set_title(clss)
+        n += 1
+plt.show()
+</code></pre>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_23_0-09e7da946801ed88c33a4bfde78c9efc.png" width="800" height="300"></p>
+<h2 id="models">Models</h2>
+<ul>
+<li><a href="https://pytorch.org/vision/stable/models.html">https://pytorch.org/vision/stable/models.html</a></li>
+<li><a href="https://pytorch.org/vision/main/models">https://pytorch.org/vision/main/models</a></li>
+<li>load your neural netwrok for feature extraction</li>
+</ul>
+<p>To Do</p>
+<ul>
+<li>Use fine-tuned weights</li>
+<li>Use different architectures for this task and compare their infernce speed and accuracy.</li>
+</ul>
+<pre><code class="language-python">weights = ['IMAGENET1K_V1', 'IMAGENET1K_V2', 'IMAGENET1K_SWAG_E2E_V1', 'IMAGENET1K_SWAG_E2E_V1', 'IMAGENET1K_SWAG_LINEAR_V1']
+</code></pre>
+<p>This is a simple way to load a pre-trained model using PyTorch</p>
+<pre><code class="language-python">model = torch.hub.load("pytorch/vision", 'resnet50', weights="IMAGENET1K_V2")
+</code></pre>
+<h3 id="swin">Swin</h3>
+<p>Pre-trained on ImageNet</p>
+<pre><code class="language-python"># Swin
+from torchvision.models import swin_v2_b, Swin_B_Weights
+
+model = models.swin_v2_b(weights=Swin_B_Weights).to(device).eval()
+
+total_params = '{:,}'.format(sum(p.numel() for p in model.parameters()))
+total_params
+</code></pre>
+<pre><code class="language-python">model
+</code></pre>
+<h3 id="resnet">ResNet</h3>
+<p>Pre-trained on ImageNet</p>
+<pre><code class="language-python"># model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2).to(device).eval()
+# model = models.resnet50(pretrained=True)
+</code></pre>
+<p>Fine-tuned on AID</p>
+<pre><code class="language-python">model = models.resnet50(pretrained=False)
+</code></pre>
+<p>/home/amir/miniconda3/envs/faiss/lib/python3.11/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+warnings.warn(
+/home/amir/miniconda3/envs/faiss/lib/python3.11/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or <code>None</code> for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing <code>weights=None</code>.
+warnings.warn(msg)</p>
+<pre><code class="language-python">model
+</code></pre>
+<p>Modify the last layer based on your fine-tuned weights</p>
+<pre><code class="language-python">num_classes = 17 # AID
+# num_classes = 43 # BigEarthNet
+
+model.fc = torch.nn.Linear(model.fc.in_features, num_classes)
+</code></pre>
+<pre><code class="language-python">checkpoint = torch.load('weights/aid_multilabel_scratch_resnet50.pth', map_location=torch.device('cpu'))
+state_dict = checkpoint['state_dict']
+model.load_state_dict(state_dict)
+model.to(device).eval()
+</code></pre>
+<pre><code>    ResNet(
+      (conv1): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+      (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(inplace=True)
+      (maxpool): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
+      (layer1): Sequential(
+        (0): Bottleneck(
+          (conv1): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+          (downsample): Sequential(
+            (0): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+            (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): Bottleneck(
+          (conv1): Conv2d(256, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+        (2): Bottleneck(
+          (conv1): Conv2d(256, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+      )
+      (layer2): Sequential(
+        (0): Bottleneck(
+          (conv1): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(128, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+          (downsample): Sequential(
+            (0): Conv2d(256, 512, kernel_size=(1, 1), stride=(2, 2), bias=False)
+            (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): Bottleneck(
+          (conv1): Conv2d(512, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(128, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+        (2): Bottleneck(
+          (conv1): Conv2d(512, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(128, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+        (3): Bottleneck(
+          (conv1): Conv2d(512, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(128, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+      )
+      (layer3): Sequential(
+        (0): Bottleneck(
+          (conv1): Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(256, 1024, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+          (downsample): Sequential(
+            (0): Conv2d(512, 1024, kernel_size=(1, 1), stride=(2, 2), bias=False)
+            (1): BatchNorm2d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): Bottleneck(
+          (conv1): Conv2d(1024, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(256, 1024, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+        (2): Bottleneck(
+          (conv1): Conv2d(1024, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(256, 1024, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+        (3): Bottleneck(
+          (conv1): Conv2d(1024, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(256, 1024, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+        (4): Bottleneck(
+          (conv1): Conv2d(1024, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(256, 1024, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+        (5): Bottleneck(
+          (conv1): Conv2d(1024, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(256, 1024, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+      )
+      (layer4): Sequential(
+        (0): Bottleneck(
+          (conv1): Conv2d(1024, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(512, 2048, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(2048, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+          (downsample): Sequential(
+            (0): Conv2d(1024, 2048, kernel_size=(1, 1), stride=(2, 2), bias=False)
+            (1): BatchNorm2d(2048, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): Bottleneck(
+          (conv1): Conv2d(2048, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(512, 2048, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(2048, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+        (2): Bottleneck(
+          (conv1): Conv2d(2048, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (conv3): Conv2d(512, 2048, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn3): BatchNorm2d(2048, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (relu): ReLU(inplace=True)
+        )
+      )
+      (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+      (fc): Linear(in_features=2048, out_features=17, bias=True)
+    )
+</code></pre>
+<p>Using this module, we can extract features from the last layer of our network, to use it as our feature extractor for our vector database</p>
+<pre><code class="language-python">class ResNetFeatures(torch.nn.Module):
+    def __init__(self, original_model):
+        super(ResNetFeatures, self).__init__()
+        self.features = torch.nn.Sequential(*list(original_model.children())[:-1])  # all layers except the final FC layer
+    
+    def forward(self, x):
+        x = self.features(x)
+        x = torch.flatten(x, 1)
+        return x
+
+# Create an instance of the new model
+model = ResNetFeatures(model).to(device).eval()
+</code></pre>
+<pre><code class="language-python">for key in state_dict.keys():
+    print(key)
+</code></pre>
+<p>Number of model parameters</p>
+<pre><code class="language-python">total_params = '{:,}'.format(sum(p.numel() for p in model.parameters()))
+total_params
+</code></pre>
+<p>'23,508,032'</p>
+<h3 id="regnet">RegNet</h3>
+<pre><code class="language-python"># RegNet
+
+model = models.regnet_y_400mf(pretrained=True).to(device).eval()
+
+total_params = '{:,}'.format(sum(p.numel() for p in model.parameters()))
+total_params
+</code></pre>
+<pre><code class="language-python">model
+</code></pre>
+<h2 id="metrics">Metrics</h2>
+<p>To Do</p>
+<ul>
+<li>What metrics for CBIR?</li>
+</ul>
+<pre><code class="language-python">def accuracy(query_label, neighbors, labels):
+    ''' A simple function to calculate the accuracy for 1 sample @ K'''
+    t, f = 0, 0
+    for i in neighbors:
+        if query_label == labels[i]:
+            t += 1
+        else:
+            f += 1
+    return '{:.1%}'.format(t / (t + f))
+</code></pre>
+<h2 id="vector-database">Vector Database</h2>
+<p>Here we use our feature extractor to convert all of our images to a (1, 2048) vector and store them in our vector database (a python list in here) and perform our NN search.</p>
+<p>Of course it's not implemented for production level use, but we can scale it using Vector Database such as Weaviate or Pinecone, etc. We can also use simpler implementation with FAISS library for our vector database and NN search.</p>
+<pre><code class="language-python">features = []
+image_paths = []
+labels = []
+
+
+# Change the first line according to the dataset you want to use
+for x, y, img_path in dataset:
+    img = x.permute(2, 0, 1).unsqueeze(0)
+    
+    with torch.no_grad():
+        feature = model(img.to(device)).detach().cpu().numpy()
+
+    features.append(feature)
+    image_paths.append(img_path)
+    labels.append(y)
+
+
+features = np.concatenate(features, axis=0)
+</code></pre>
+<pre><code class="language-python">features.shape
+</code></pre>
+<p>(10000, 2048)</p>
+<p><strong>Swin</strong></p>
+<ul>
+<li>took</li>
+</ul>
+<p><strong>ResNet</strong></p>
+<ul>
+<li>Took 4m 20s for AID on NVIDIA 3060</li>
+</ul>
+<h2 id="nn-search">NN Search</h2>
+<pre><code class="language-python">id = random.randint(0, len(dataset))
+img, label, img_path = dataset[id]
+img = img.permute(2, 0, 1).unsqueeze(0)
+
+query_image_path = img_path
+query_label = label
+
+with torch.no_grad():
+    query_feature = model(img.to(device)).detach().cpu().numpy()
+</code></pre>
+<pre><code class="language-python">k = 20
+
+neigh = NearestNeighbors(n_neighbors=k, algorithm='brute')
+neigh.fit(features)
+distances, indices = neigh.kneighbors(query_feature)
+</code></pre>
+<pre><code class="language-python"># Plot query image
+query_image = Image.open(query_image_path)
+
+
+print(f'Accuracy for this sample @ k = {k}: {accuracy(query_label, indices[0], labels)}')
+
+rows, columns = 4, 5
+fig, axs = plt.subplots(rows, columns, figsize=(34, 21))
+
+n = 0
+for i in range(rows):
+    for j in range(columns):
+        if (i == 0) and (j == 0):
+            axs[0][0].imshow(query_image)
+            axs[0][0].set_title(f'Query: {class_map[query_label]}')
+        else:
+            axs[i][j].imshow(Image.open(image_paths[indices[0][n+1]]))
+            axs[i][j].set_title(f'NN {n+1}: {class_map[labels[indices[0][n+1]]]}')
+            n += 1
+</code></pre>
+<p>Accuracy for this sample @ k = 20: 100.0%</p>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_60_1-640dab6c0bee7b9b33e6a35412c6dd34.png" width="800" height="500"></p>
+<h2 id="evaluation">Evaluation</h2>
+<p>We used the AID dataset for both training and inference</p>
+<pre><code class="language-python">def compute_confusion_matrix_and_accuracy(dataset, model, device, features, labels, ks):
+    # Initialize a dictionary to hold confusion matrices and accuracies for different k
+    results = {k: {'confusion_matrix': None, 'accuracy': None, 'per_class_accuracy': None, 'confusion_matrix_accuracy': None} for k in ks}
+    
+    # Initialize the NearestNeighbors model
+    neigh = NearestNeighbors(n_neighbors=max(ks), algorithm='brute')
+    neigh.fit(features)
+    
+    # Prepare ground truth and predicted labels for confusion matrix calculation
+    all_true_labels = []
+    all_pred_labels = {k: [] for k in ks}
+    
+    for i in range(len(dataset)):
+        img, label, _ = dataset[i]
+        img = img.permute(2, 0, 1).unsqueeze(0)
+
+        with torch.no_grad():
+            query_feature = model(img.to(device)).detach().cpu().numpy()
+
+        distances, indices = neigh.kneighbors(query_feature)
+        
+        true_label = labels[i]
+        all_true_labels.append(true_label)
+        
+        for k in ks:
+            neighbors = indices[0][:k]
+            predicted_label = np.bincount([labels[n] for n in neighbors]).argmax()
+            all_pred_labels[k].append(predicted_label)
+    
+    # Calculate confusion matrices and accuracies for each k
+    for k in ks:
+        cm = confusion_matrix(all_true_labels, all_pred_labels[k])
+        acc = accuracy_score(all_true_labels, all_pred_labels[k])
+
+        results[k]['confusion_matrix'] = cm
+        results[k]['accuracy'] = acc
+        # results[k]['per_class_accuracy'] = cm.diagonal() / cm.sum(axis=0)
+
+        conf_mat_acc = np.zeros_like(cm, dtype=float)
+        # results[k]['confusion_matrix'].dtype = float
+        for i, row in enumerate(cm):
+            conf_mat_acc[i] = row / row.sum()
+        results[k]['confusion_matrix_accuracy'] = conf_mat_acc
+    
+
+    
+    return results
+</code></pre>
+<pre><code class="language-python">def visualize_confusion_matrix(cm, class_names, k):
+    plt.figure(figsize=(18, 18))  # Increase figure size
+    sns.set(font_scale=1.2)  # Increase font scale
+    sns.heatmap(cm, annot=True, fmt='', cmap='Blues', xticklabels=class_names, yticklabels=class_names, annot_kws={"size": 12, "ha": 'center', "va": 'center'}, linewidths=.5, linecolor='black')
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+    plt.title(f'Predictions for k={k}')
+    plt.show()
+</code></pre>
+<pre><code class="language-python">ks = [10, 50, 100]
+results = compute_confusion_matrix_and_accuracy(dataset, model, device, features, labels, ks)
+</code></pre>
+<h3 id="accuracies-confusion-matrix">Accuracies Confusion Matrix</h3>
+<pre><code class="language-python">for k in ks:
+    visualize_confusion_matrix(np.round(results[k]['confusion_matrix_accuracy'], 2), classes, k)
+</code></pre>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_66_0-63ce4112af9273a7a683d2b1bd74290c.png" width="800" height="800"></p>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_66_1-295bc34f26651e527ead3f3151ee24e8.png" width="800" height="800"></p>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_66_2-f3005aba9d4fc86cbf7137f7bf44efc3.png" width="800" height="800"></p>
+<h3 id="predictions-confusion-matrix">Predictions Confusion Matrix</h3>
+<pre><code class="language-python">for k in ks:
+    visualize_confusion_matrix(results[k]['confusion_matrix'], classes, k)
+</code></pre>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_68_0-e6821aa1e926207e49eb3f59f0410da2.png" width="800" height="800"></p>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_68_1-5c43d7105b41e4da8500c2632af29516.png" width="800" height="800"></p>
+<p><img alt="png" src="https://amirafshari.github.io/assets/images/image-search_68_2-61146bbdcc9dfa033d6d0abb7213cbaf.png" width="800" height="800"></p>]]></content:encoded>
+            <category>Deep Learning</category>
+            <category>Machine Learning</category>
+            <category>Computer Vision</category>
+            <category>Remote Sensing</category>
+        </item>
+        <item>
             <title><![CDATA[Multimodal Vision-Language Search on Satellite Images]]></title>
             <link>https://amirafshari.github.io/blog/remote-sensing-image-search-cbir</link>
             <guid>https://amirafshari.github.io/blog/remote-sensing-image-search-cbir</guid>

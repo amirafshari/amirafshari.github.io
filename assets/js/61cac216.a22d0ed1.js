@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkmy_website=self.webpackChunkmy_website||[]).push([[1480],{3856:e=>{e.exports=JSON.parse('{"label":"Remote Sensing","permalink":"/blog/tags/remote-sensing","allTagsPath":"/blog/tags","count":1,"unlisted":false}')}}]);
